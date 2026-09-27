@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#111827">
+<title>VERTEX Analysis — V1</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#111827;color:#f3f4f6;font-family:Arial,sans-serif}
+header{padding:14px 16px;background:#0b1220;border-bottom:1px solid #374151}
+h1{font-size:19px;margin:0}.sub{font-size:12px;color:#9ca3af;margin-top:3px}
+main{max-width:1100px;margin:auto;padding:12px}
+.panel{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:12px;margin-bottom:12px}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+button,.filebtn{border:0;border-radius:9px;padding:11px 14px;background:#2563eb;color:white;font-weight:600;cursor:pointer}
+button.secondary{background:#374151} button.active{background:#059669}
+input[type=file]{display:none}
+.stage-wrap{position:relative;width:100%;overflow:hidden;border-radius:10px;background:#000;touch-action:none}
+canvas{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:#d1d5db;margin-top:9px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;background:#60a5fa}
+.row{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:13px}
+.row input{width:18px;height:18px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px;border-bottom:1px solid #374151;text-align:left}
+small{color:#9ca3af}
+</style>
+</head>
+<body>
+<header><h1>VERTEX Analysis</h1><div class="sub">Analisi fotografica — V1</div></header>
+<main>
+<div class="panel">
+  <div class="controls">
+    <label class="filebtn">📷 Carica foto<input id="file" type="file" accept="image/*" capture="environment"></label>
+    <button id="reset" class="secondary">Reset punti</button>
+    <button id="save">Salva analisi</button>
+    <button id="load" class="secondary">Carica analisi</button>
+  </div>
+  <input id="savedFile" type="file" accept=".json" style="display:none">
+</div>
+
+<div class="panel">
+  <div class="stage-wrap"><canvas id="canvas"></canvas></div>
+  <div class="legend">
+    <span><i class="dot"></i>Punti anatomici</span>
+    <span>Linea verticale = gravità</span>
+    <span>Tratti = costruzione geometrica V1</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row"><input type="checkbox" id="vertical" checked><label for="vertical">Verticale di gravità</label></div>
+  <div class="row"><input type="checkbox" id="lines" checked><label for="lines">Linee di costruzione</label></div>
+  <div class="row"><input type="checkbox" id="poly" checked><label for="poly">Poligono dei punti</label></div>
+  <small>V1: i punti sono posizionati manualmente. Le costruzioni geometriche sono una base tecnica da validare e definire secondo il protocollo Littlejohn/Vertex.</small>
+</div>
+
+<div class="panel">
+<h3 style="margin-top:0">Coordinate relative alla verticale</h3>
+<table><thead><tr><th>Punto</th><th>X relativa</th><th>Y</th></tr></thead><tbody id="table"></tbody></table>
+</div>
+</main>
+
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+const names=['Occipite','T4','T9','L3','Sacro'];
+let img=new Image(), hasImage=false, points=[];
+const colors=['#60a5fa','#34d399','#fbbf24','#f87171','#c084fc'];
+let drag=-1, baseW=900, baseH=1200;
+
+function defaultPoints(){
+  return [
+    {x:.50,y:.13},{x:.50,y:.32},{x:.50,y:.48},{x:.50,y:.67},{x:.50,y:.84}
+  ];
+}
+points=defaultPoints();
+
+function resizeCanvas(){
+  if(!hasImage)return;
+  const maxW=Math.min(window.innerWidth-24,1100);
+  const ratio=img.naturalHeight/img.naturalWidth;
+  canvas.width=maxW; canvas.height=Math.round(maxW*ratio);
+  draw();
+}
+window.addEventListener('resize',resizeCanvas);
+
+document.getElementById('file').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const url=URL.createObjectURL(f);
+  img.onload=()=>{hasImage=true;resizeCanvas();URL.revokeObjectURL(url)};
+  img.src=url;
+};
+
+function pxy(p){return{x:p.x*canvas.width,y:p.y*canvas.height}}
+function draw(){
+  if(!hasImage)return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+
+  const pts=points.map(pxy);
+  const mid=canvas.width/2;
+
+  if(document.getElementById('vertical').checked){
+    ctx.save();ctx.setLineDash([10,8]);ctx.lineWidth=2;ctx.strokeStyle='#ffffff';
+    ctx.beginPath();ctx.moveTo(mid,0);ctx.lineTo(mid,canvas.height);ctx.stroke();ctx.restore();
+  }
+
+  if(document.getElementById('poly').checked){
+    ctx.save();ctx.lineWidth=3;ctx.strokeStyle='#60a5fa';
+    ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();ctx.restore();
+  }
+
+  if(document.getElementById('lines').checked){
+    ctx.save();ctx.lineWidth=2;ctx.strokeStyle='#fbbf24';
+    for(let i=0;i<pts.length-1;i++){
+      ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[i+1].x,pts[i+1].y);ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  pts.forEach((p,i)=>{
+    ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);
+    ctx.fillStyle=colors[i];ctx.fill();ctx.lineWidth=3;ctx.strokeStyle='#111827';ctx.stroke();
+    ctx.font='bold 13px Arial';ctx.fillStyle='#fff';ctx.fillText(names[i],p.x+13,p.y+5);
+  });
+  updateTable();
+}
+
+function pointerPos(e){
+  const r=canvas.getBoundingClientRect();
+  return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};
+}
+canvas.addEventListener('pointerdown',e=>{
+  if(!hasImage)return;
+  const p=pointerPos(e);let best=-1,dist=.035;
+  points.forEach((q,i)=>{const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<dist){dist=d;best=i}});
+  drag=best;if(drag>=0)canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{
+  if(drag<0)return;
+  const p=pointerPos(e);points[drag].x=Math.max(0,Math.min(1,p.x));points[drag].y=Math.max(0,Math.min(1,p.y));draw();
+});
+canvas.addEventListener('pointerup',()=>drag=-1);
+canvas.addEventListener('pointercancel',()=>drag=-1);
+
+function updateTable(){
+  const t=document.getElementById('table');t.innerHTML='';
+  points.forEach((p,i)=>{
+    const tr=document.createElement('tr');
+    const x=((p.x-.5)*canvas.width).toFixed(1);
+    const y=(p.y*canvas.height).toFixed(1);
+    tr.innerHTML=`<td>${names[i]}</td><td>${x} px</td><td>${y} px</td>`;
+    t.appendChild(tr);
+  });
+}
+document.querySelectorAll('input[type=checkbox]').forEach(x=>x.onchange=draw);
+
+document.getElementById('reset').onclick=()=>{points=defaultPoints();draw()};
+
+document.getElementById('save').onclick=()=>{
+  if(!hasImage){alert('Carica prima una fotografia.');return}
+  const data={version:'V1',date:new Date().toISOString(),points};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vertex-analysis.json';a.click();
+};
+
+document.getElementById('load').onclick=()=>document.getElementById('savedFile').click();
+document.getElementById('savedFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{try{points=JSON.parse(r.result).points;draw()}catch{alert('File non valido.')}};r.readAsText(f);
+};
+</script>
+</body>
+</html>
